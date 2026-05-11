@@ -1,0 +1,776 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>Crossle</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Clear Sans', 'Helvetica Neue', Arial, sans-serif;
+      background: #121213;
+      color: #fff;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+      overflow-x: hidden;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    header {
+      width: 100%;
+      max-width: 500px;
+      border-bottom: 1px solid #3a3a3c;
+      padding: 14px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    h1 {
+      font-size: 1.7rem;
+      font-weight: 700;
+      letter-spacing: 5px;
+      text-transform: uppercase;
+    }
+
+    .game-wrap {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px 4px;
+      width: 100%;
+      max-width: 500px;
+      flex: 1;
+    }
+
+    /* ── Message toast ───────────────────────────────── */
+    #message {
+      min-height: 26px;
+      font-size: 0.85rem;
+      font-weight: 700;
+      letter-spacing: 1px;
+      text-align: center;
+      transition: opacity 0.3s;
+    }
+    #message.hidden { opacity: 0; }
+
+    /* ── Cross display ───────────────────────────────── */
+    .cross-wrap {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .cross-label {
+      font-size: 0.65rem;
+      color: #818384;
+      letter-spacing: 2px;
+    }
+
+    .cross-grid {
+      display: grid;
+      grid-template-columns: repeat(5, 46px);
+      grid-template-rows: repeat(5, 46px);
+      gap: 5px;
+    }
+
+    .cross-cell {
+      width: 46px;
+      height: 46px;
+      border: 2px solid #3a3a3c;
+      border-radius: 3px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.25rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      transition: background 0.3s, border-color 0.3s;
+    }
+    .cross-cell.blank   { border: none; background: transparent; pointer-events: none; }
+    .cross-cell.empty   { background: #121213; }
+    .cross-cell.typing  { border-color: #818384; }
+    .cross-cell.correct { background: #538d4e; border-color: #538d4e; }
+    .cross-cell.present { background: #b59f3b; border-color: #b59f3b; }
+    .cross-cell.absent  { background: #3a3a3c; border-color: #3a3a3c; }
+
+    /* ── History grids ───────────────────────────────── */
+    .history-wrap {
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+      width: 100%;
+    }
+
+    .word-history {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      align-items: center;
+    }
+
+    .word-history-label {
+      font-size: 0.6rem;
+      color: #818384;
+      letter-spacing: 2px;
+      margin-bottom: 2px;
+    }
+
+    .hist-row {
+      display: flex;
+      gap: 3px;
+    }
+
+    .hist-cell {
+      width: 30px;
+      height: 30px;
+      border: 2px solid #3a3a3c;
+      border-radius: 2px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.8rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      transition: background 0.25s;
+    }
+    .hist-cell.current-empty { border-color: #565758; }
+    .hist-cell.current-typed { border-color: #999; }
+    .hist-cell.correct { background: #538d4e; border-color: #538d4e; }
+    .hist-cell.present { background: #b59f3b; border-color: #b59f3b; }
+    .hist-cell.absent  { background: #3a3a3c; border-color: #3a3a3c; }
+
+    .hist-cell.flip {
+      animation: flip 0.5s ease forwards;
+    }
+
+    @keyframes flip {
+      0%   { transform: scaleY(1); }
+      50%  { transform: scaleY(0); }
+      100% { transform: scaleY(1); }
+    }
+
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      20%       { transform: translateX(-4px); }
+      40%       { transform: translateX(4px); }
+      60%       { transform: translateX(-4px); }
+      80%       { transform: translateX(4px); }
+    }
+    .shake { animation: shake 0.35s ease; }
+
+    /* ── Input switcher ──────────────────────────────── */
+    .switcher {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.75rem;
+      color: #818384;
+    }
+
+    .pill {
+      padding: 5px 14px;
+      border-radius: 20px;
+      border: 2px solid #3a3a3c;
+      font-size: 0.75rem;
+      font-weight: 700;
+      letter-spacing: 1px;
+      cursor: pointer;
+      color: #818384;
+      transition: border-color 0.15s, color 0.15s;
+      touch-action: manipulation;
+    }
+    .pill.active {
+      border-color: #fff;
+      color: #fff;
+    }
+    .pill.done {
+      border-color: #538d4e;
+      color: #538d4e;
+    }
+    .pill.done.active {
+      border-color: #6aaf60;
+      color: #6aaf60;
+    }
+
+    /* ── Keyboard ────────────────────────────────────── */
+    .keyboard {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      width: 100%;
+      padding-bottom: 8px;
+    }
+
+    .key-row {
+      display: flex;
+      justify-content: center;
+      gap: 5px;
+    }
+
+    .key {
+      flex: 1;
+      max-width: 40px;
+      height: 54px;
+      border: none;
+      border-radius: 4px;
+      background: #818384;
+      color: #fff;
+      font-size: 0.85rem;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-transform: uppercase;
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
+      transition: background 0.2s;
+    }
+    .key.wide { max-width: 58px; font-size: 0.7rem; }
+    .key.correct { background: #538d4e; }
+    .key.present { background: #b59f3b; }
+    .key.absent  { background: #3a3a3c; }
+
+    /* ── Game over ───────────────────────────────────── */
+    .game-over-bar {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .new-game-btn {
+      padding: 12px 32px;
+      background: #538d4e;
+      border: none;
+      border-radius: 4px;
+      color: #fff;
+      font-size: 1rem;
+      font-weight: 700;
+      letter-spacing: 3px;
+      cursor: pointer;
+      touch-action: manipulation;
+    }
+    .new-game-btn:active { filter: brightness(0.85); }
+
+    .answer-reveal {
+      font-size: 0.85rem;
+      color: #818384;
+      letter-spacing: 2px;
+    }
+    .answer-reveal span { color: #fff; font-weight: 700; }
+  </style>
+</head>
+<body>
+
+<header><h1>Crossle</h1></header>
+
+<div class="game-wrap">
+
+  <div id="message"></div>
+
+  <!-- Cross display -->
+  <div class="cross-wrap">
+    <div class="cross-label">CROSS</div>
+    <div class="cross-grid" id="cross-grid"></div>
+  </div>
+
+  <!-- History grids -->
+  <div class="history-wrap">
+    <div class="word-history">
+      <div class="word-history-label">ACROSS</div>
+      <div id="h-history"></div>
+    </div>
+    <div class="word-history">
+      <div class="word-history-label">DOWN</div>
+      <div id="v-history"></div>
+    </div>
+  </div>
+
+  <!-- Input mode switcher -->
+  <div class="switcher" id="switcher">
+    <span>Typing:</span>
+    <div class="pill active" id="pill-h" onclick="setActive('h')">ACROSS</div>
+    <div class="pill" id="pill-v" onclick="setActive('v')">DOWN</div>
+  </div>
+
+  <!-- Game over area (hidden until game ends) -->
+  <div class="game-over-bar" id="game-over-bar" style="display:none"></div>
+
+  <!-- Keyboard -->
+  <div class="keyboard" id="keyboard"></div>
+
+</div>
+
+<script>
+// ── Word list (5-letter only) ──────────────────────────────────────────────────
+const WORDS = [
+  'ABBEY','ABBOT','ABIDE','ABLER','ABOUT','ABOVE','ABUSE','ACTED','ACUTE','ADMIT',
+  'ADOPT','ADULT','AFTER','AGILE','AGLOW','AGONY','AGREE','AHEAD','AISLE','ALARM',
+  'ALBUM','ALERT','ALIEN','ALIGN','ALIVE','ALLEY','ALLOT','ALLOW','ALONE','ALONG',
+  'ALTAR','ALTER','ANGEL','ANGER','ANGLE','ANGRY','ANIME','ANKLE','ANTIC','ANVIL',
+  'APART','APPLE','APPLY','APRON','ARENA','ARGUE','ARISE','ARRAY','ARSON','ATTIC',
+  'AUDIO','AUDIT','AVERT','AVOID','AWARD','AWARE','AWFUL','BARON','BEARD','BEAST',
+  'BEGAN','BEGIN','BEING','BELOW','BENCH','BINGO','BLACK','BLADE','BLAME','BLAND',
+  'BLANK','BLAST','BLAZE','BLEAK','BLEND','BLESS','BLIND','BLOCK','BLOOD','BLOOM',
+  'BLOWN','BLUES','BLUNT','BOARD','BONUS','BOOST','BOUND','BRAIN','BRAND','BRAVE',
+  'BREAD','BREAK','BREED','BRICK','BRIDE','BRIEF','BRING','BROAD','BROKE','BROOD',
+  'BROWN','BRUSH','BUILD','BUILT','BURLY','BURNT','BURST','BUYER','CABIN','CAMEL',
+  'CANDY','CARRY','CATCH','CAUSE','CHAIN','CHAIR','CHALK','CHAOS','CHARM','CHASE',
+  'CHEAP','CHEAT','CHECK','CHEEK','CHEST','CHIEF','CHILD','CHOIR','CHOKE','CHUNK',
+  'CIVIC','CIVIL','CLAIM','CLASH','CLASS','CLEAN','CLEAR','CLICK','CLIFF','CLIMB',
+  'CLING','CLOCK','CLONE','CLOSE','CLOUD','CLOWN','COACH','COAST','COBRA','COLOR',
+  'COMIC','CORAL','COUNT','COURT','COVER','CRACK','CRAFT','CRANE','CRASH','CRAZY',
+  'CREAM','CREEK','CRIME','CRISP','CROWD','CROWN','CRUEL','CRUSH','CURVE','CYCLE',
+  'DAILY','DANCE','DATUM','DEATH','DEBUT','DECAY','DELTA','DENSE','DEPOT','DEPTH',
+  'DERBY','DEVIL','DIRTY','DISCO','DITCH','DIVER','DIZZY','DONOR','DOUBT','DOUGH',
+  'DRAFT','DRAIN','DRAMA','DRANK','DRAWN','DREAM','DRESS','DRINK','DRIVE','DROVE',
+  'DROWN','EARLY','EARTH','EIGHT','ELITE','EMBER','EMPTY','ENEMY','ENJOY','ENTER',
+  'ENTRY','EQUAL','ERROR','EVENT','EVERY','EVICT','EXACT','EXERT','EXILE','EXIST',
+  'EXTRA','FABLE','FAINT','FAIRY','FAITH','FALSE','FANCY','FATAL','FEAST','FENCE',
+  'FEWER','FIFTH','FIFTY','FIGHT','FINAL','FIRST','FIXED','FLAME','FLASH','FLASK',
+  'FLESH','FLOCK','FLOOR','FLORA','FLOUR','FLOWN','FLUTE','FOCUS','FORCE','FORGE',
+  'FOUND','FRAME','FRAUD','FRESH','FRONT','FROST','FRUIT','FUNDS','FUNNY','FUZZY',
+  'GHOST','GIANT','GIVEN','GLAND','GLASS','GLIDE','GLINT','GLOOM','GLOSS','GOING',
+  'GRACE','GRADE','GRAIN','GRAND','GRANT','GRASP','GRASS','GRAVE','GREAT','GREED',
+  'GREEN','GRIEF','GRILL','GRIND','GROAN','GROSS','GROUP','GROVE','GROWL','GUARD',
+  'GUIDE','GUILT','GUSTO','HABIT','HAPPY','HARSH','HASTE','HAVEN','HEART','HEAVY',
+  'HENCE','HERBS','HINGE','HONEY','HONOR','HORSE','HOTEL','HOUSE','HUMAN','HUMOR',
+  'HURRY','IMAGE','IMPLY','INDEX','INNER','INPUT','INTER','INTRO','ISSUE','IVORY',
+  'JOKER','JUDGE','JUICE','JUMBO','KEBAB','KNEEL','KNOWN','LABEL','LANCE','LARGE',
+  'LASER','LAUGH','LAYER','LEARN','LEAST','LEGAL','LEMON','LEVEL','LIGHT','LIMIT',
+  'LINER','LIVER','LOCAL','LODGE','LOGIC','LOOSE','LOVER','LOWER','LUCKY','LUNAR',
+  'LYRIC','MAGIC','MAJOR','MAKER','MANOR','MAPLE','MATCH','MAYOR','MEDIA','MERCY',
+  'MERGE','MERIT','METAL','MIGHT','MINOR','MINUS','MIXED','MODEL','MONEY','MONTH',
+  'MORAL','MOUNT','MOUSE','MOUTH','MOVED','MOVIE','MUSIC','NAIVE','NASTY','NAVAL',
+  'NERVE','NEVER','NIGHT','NOBLE','NOISE','NORTH','NOTED','NOVEL','NURSE','OCCUR',
+  'OCEAN','OFFER','OFTEN','OLIVE','ONSET','OPERA','ORDER','OTHER','OUTER','OWNED',
+  'OWNER','OXIDE','OZONE','PAINT','PANIC','PAPER','PATCH','PAUSE','PEACE','PEACH',
+  'PEARL','PEDAL','PENNY','PERCH','PHASE','PHONE','PHOTO','PIANO','PILOT','PITCH',
+  'PIXEL','PIZZA','PLACE','PLAIN','PLANE','PLANT','PLAZA','PLEAD','PLUCK','PLUMB',
+  'POINT','POLAR','POPPY','POWER','PRESS','PRICE','PRIDE','PRIME','PRINT','PRIOR',
+  'PRIZE','PROBE','PRONE','PROSE','PROUD','PROVE','PULSE','PUNCH','PUPPY','QUERY',
+  'QUEST','QUEUE','QUICK','QUIET','QUOTA','QUOTE','RADAR','RADIO','RAISE','RANGE',
+  'RAPID','RATIO','REACH','READY','REALM','REBEL','REFER','REIGN','REMIX','REPAY',
+  'REPLY','RIDER','RIDGE','RIFLE','RIGHT','RISKY','RIVAL','RIVER','ROBOT','ROCKY',
+  'ROMAN','ROUGH','ROUND','ROUTE','ROYAL','RUGBY','RULER','RUMOR','RURAL','RUSTY',
+  'SADLY','SAINT','SAUCE','SCALE','SCARE','SCENE','SCORE','SCOUT','SEIZE','SENSE',
+  'SERVE','SEVEN','SHADE','SHAKE','SHALL','SHAME','SHAPE','SHARE','SHARK','SHARP',
+  'SHELF','SHELL','SHIFT','SHINE','SHIRT','SHORT','SHOUT','SIGHT','SILLY','SINCE',
+  'SIXTY','SKILL','SLACK','SLANG','SLASH','SLAVE','SLEEK','SLEEP','SLICE','SLIDE',
+  'SLIME','SLING','SLUMP','SMALL','SMART','SMELL','SMILE','SMOKE','SNACK','SNARE',
+  'SOLAR','SOLID','SOLVE','SORRY','SOUTH','SPACE','SPARE','SPARK','SPEAK','SPELL',
+  'SPEND','SPICE','SPIKE','SPINE','SPITE','SPLIT','SPOKE','SPOON','SPORT','SPRAY',
+  'SQUAD','STAIN','STAND','STARE','START','STATE','STEAM','STEEL','STEEP','STEER',
+  'STERN','STICK','STIFF','STILL','STOMP','STONE','STOOD','STORE','STORM','STORY',
+  'STOUT','STOVE','STRAW','STRAY','STRIP','STUCK','STUDY','STUFF','SUGAR','SUITE',
+  'SUNNY','SUPER','SURGE','SWAMP','SWEAR','SWEEP','SWEPT','SWIFT','SWORD','SWORN',
+  'TABLE','TAKEN','TASTE','TEACH','TEARS','TENSE','THORN','THOSE','THREE','THREW',
+  'THROW','TIGER','TIMER','TIRED','TITLE','TOAST','TODAY','TOKEN','TOOTH','TOPIC',
+  'TOTAL','TOUCH','TOUGH','TOWER','TOXIC','TRACE','TRACK','TRADE','TRAIL','TRAIN',
+  'TRAIT','TRAMP','TRAWL','TREAD','TREAT','TREND','TRIAL','TRICK','TRIED','TROOP',
+  'TRUCK','TRULY','TRUST','TRUTH','TUMOR','TUNED','TWIST','ULTRA','UNCLE','UNDER',
+  'UNION','UNITY','UNTIL','UPPER','UPSET','URBAN','USAGE','VALID','VALUE','VALVE',
+  'VAPOR','VERSE','VISIT','VITAL','VIVID','VOCAL','VOICE','VOTER','WAGON','WASTE',
+  'WATCH','WATER','WEARY','WEIRD','WHEAT','WHEEL','WHERE','WHICH','WHILE','WHITE',
+  'WHOLE','WHOSE','WIDER','WITCH','WOMAN','WOMEN','WORLD','WORRY','WORSE','WORST',
+  'WORTH','WOULD','WOUND','WRATH','WRITE','WRONG','YACHT','YEARN','YIELD','YOUNG',
+  'YOUTH','YOURS','ZONAL','BLAND','BLOND','BLEND','BLIND','BLOOD','BRINY','BRINE',
+  'CANAL','CAROL','CAROL','CIVIL','CLOAK','CLOVE','DECAL','DECOY','DEPOT','DIGIT',
+  'DIVOT','ECLAT','EDICT','EMOJI','ENVOY','EPOCH','EQUIP','ETHIC','EVOKE','EXACT',
+  'FACET','FACIT','FOLIO','FROND','FROTH','FUTON','GAUZE','GAVEL','GENRE','GIRTH',
+  'GLINT','GLOSS','GLOVE','GLYPH','GNOME','GORGE','GOUGE','GRUEL','GUILE','GULCH',
+  'GUAVA','HADNT','HALVE','HEIST','HELIX','HIPPO','HOIST','HOMER','HOTLY','HYENA',
+  'IDIOM','IGLOO','INANE','INCUR','INEPT','INFER','INLAY','INTER','INURE','IONIC',
+  'IRATE','IRONY','JARRED','JAZZY','JELLY','JIFFY','JOINT','JOUST','KNACK','KNAVE',
+  'KNEEL','KNELT','KNIFE','KNOCK','KNOLL','KNOT','LAPEL','LAPSE','LARVA','LATEX',
+  'LAYER','LEAPT','LITHE','LIVID','LLAMA','LOFTY','LUSTY','MAXIM','MIMIC','MIRTH',
+  'MOCHA','MOGUL','MOTIF','MOULT','MUDDY','MUMMY','MURKY','MUSTY','NIFTY','NINETY',
+  'NINJA','NITTY','NOXIOUS','NYMPH','OAKEN','OBESE','OPTIC','ORBIT','OTTER','OUTDO',
+  'PAGAN','PARKA','PATIO','PATSY','PAUPER','PAYEE','PEARL','PENAL','PERKY','PEWIT',
+  'PINEY','PINTO','PLAIT','PLANK','PLASM','PLATE','PLINK','PLONK','PLOY','PLUMB',
+  'POKER','POLYP','POUCH','POUTY','PREEN','PRIVY','PROXY','PRUDE','PSALM','PUPIL',
+  'QUAIL','QUASH','QUAFF','QUALM','QUIRK','QUOTA','RABBI','RADON','RASPY','RATTY',
+  'RAVEN','RAWLY','REGAL','RELAX','RELIC','REMIX','RENEW','REPEL','RERUN','RESIN',
+  'RETCH','RETRO','RIPEN','RIVET','ROACH','ROBIN','RODEO','ROOST','ROUGE','ROVER',
+  'ROWDY','RUMEN','RUNNY','RUPEE','SABOT','SALVO','SANDY','SAPID','SAPPY','SATIN',
+  'SATYR','SAVVY','SCALD','SCALP','SCALY','SCANT','SCAMP','SCOFF','SCONE','SCOOP',
+  'SCOPE','SCORN','SCOUR','SCOWL','SCRUB','SEEDY','SEGUE','SEPTIC','SERUM','SETUP',
+  'SHADY','SHARD','SHEAF','SHEAR','SHEEN','SHEER','SIEGE','SIGMA','SINEW','SIREN',
+  'SIXTH','SKATE','SKIMP','SKIPPER','SKULL','SKUNK','SLAIN','SLANT','SLEEK','SLEPT',
+  'SLICK','SLOPE','SLOTH','SLUNK','SMACK','SMEAR','SMELT','SMITE','SMOCK','SNEAK',
+  'SNIFF','SNOUT','SNOWY','SNUCK','SNUFF','SOAPY','SOGGY','SOMBER','SONIC','SOOTH',
+  'SORREL','SOUPY','SPAM','SPANK','SPAWN','SPEAR','SPECK','SPEED','SPEW','SPILL',
+  'SPINY','SPIRE','SPLAT','SPORE','SPOUT','SPRAG','SPREE','SPRIG','SPROUT','SPUNK',
+  'SPURN','SPURT','SQUAT','SQUIB','STALE','STALK','STALL','STAMP','STANK','STASH',
+  'STAVE','STEAD','STEAK','STEAL','STEED','STEEP','STEW','STOIC','STOOL','STROP',
+  'STRUT','STUMP','STUNG','STUNK','STUNT','STYLE','SUAVE','SUMAC','SUPER','SURER',
+  'SURLY','SWAIN','SWALE','SWATH','SWILL','SWINE','SWIPE','SWIRL','SWOOP','SYRUP',
+  'TABBY','TACIT','TALON','TANGY','TAPIR','TARDY','TAUNT','TAWNY','TEPID','TERSE',
+  'THEFT','THEIR','THEYN','THICK','THIEF','THONG','THUMP','TIARA','TIDAL','TIMID',
+  'TIPSY','TITAN','TOILE','TOTEM','TRACE','TROUT','TUBER','TULIP','TUNIC','TUTOR',
+  'TWANG','TWEAK','TWEED','TWIRL','TWIT','TWIXT','UDDER','ULCER','UNCUT','UNFIT',
+  'UNIFY','UNITE','UNLIT','UNTIE','UNWED','UPEND','USURP','UTTER','UVULA','VAUNT',
+  'VENOM','VILLA','VIXEN','VISOR','VISTA','VIZIR','VODKA','VOILA','VOUCH','VYING',
+  'WALTZ','WARTY','WAVER','WAXEN','WEEDY','WELCH','Welsh','WHACK','WHIFF','WHIRL',
+  'WHISK','WHOOP','WIDEN','WIMPY','WINDY','WISPY','WITHE','WONKY','WORDY','WRACK',
+  'WREAK','WREST','WRING','WRUNG','YEOMAN','YODEL','YOKEL','ZEBRA','ZESTY','ZILCH',
+].filter(w => w.length === 5);
+
+// Deduplicate
+const WORD_SET = [...new Set(WORDS)];
+
+// ── State ──────────────────────────────────────────────────────────────────────
+let wordH, wordV, attempts, curH, curV, active, over;
+
+function initGame() {
+  const pool = [...WORD_SET].sort(() => Math.random() - 0.5);
+  wordH = pool[0];
+  const mid = wordH[2];
+  const vCandidates = WORD_SET.filter(w => w !== wordH && w[2] === mid);
+  if (!vCandidates.length) { initGame(); return; }
+  wordV = vCandidates[Math.floor(Math.random() * vCandidates.length)];
+
+  attempts = [];
+  curH = '';
+  curV = '';
+  active = 'h';
+  over = false;
+
+  document.getElementById('switcher').style.display = '';
+  document.getElementById('game-over-bar').style.display = 'none';
+  showMessage('');
+  renderAll();
+}
+
+// ── Scoring ────────────────────────────────────────────────────────────────────
+function score(guess, answer) {
+  const res = Array(5).fill('absent');
+  const pool = answer.split('');
+  const used = Array(5).fill(false);
+  for (let i = 0; i < 5; i++) {
+    if (guess[i] === answer[i]) { res[i] = 'correct'; used[i] = true; }
+  }
+  for (let i = 0; i < 5; i++) {
+    if (res[i] === 'correct') continue;
+    for (let j = 0; j < 5; j++) {
+      if (!used[j] && guess[i] === pool[j]) { res[i] = 'present'; used[j] = true; break; }
+    }
+  }
+  return res;
+}
+
+// ── Keyboard letter states ─────────────────────────────────────────────────────
+function keyStates() {
+  const s = {};
+  const rank = { correct: 3, present: 2, absent: 1 };
+  for (const a of attempts) {
+    [...a.hScore, ...a.vScore].forEach((st, i) => {
+      const letter = i < 5 ? a.h[i] : a.v[i - 5];
+      if (!s[letter] || rank[st] > rank[s[letter]]) s[letter] = st;
+    });
+  }
+  return s;
+}
+
+// ── Best cross state (for cross grid) ─────────────────────────────────────────
+function bestCrossState() {
+  const hLetters = Array(5).fill('');
+  const hStatus  = Array(5).fill(null);
+  const vLetters = Array(5).fill('');
+  const vStatus  = Array(5).fill(null);
+  const rank = { correct: 3, present: 2, absent: 1 };
+
+  for (const a of attempts) {
+    for (let i = 0; i < 5; i++) {
+      if (!hStatus[i] || rank[a.hScore[i]] > rank[hStatus[i]]) {
+        hStatus[i] = a.hScore[i];
+        hLetters[i] = a.hScore[i] === 'correct' ? a.h[i] : '';
+      }
+      if (!vStatus[i] || rank[a.vScore[i]] > rank[vStatus[i]]) {
+        vStatus[i] = a.vScore[i];
+        vLetters[i] = a.vScore[i] === 'correct' ? a.v[i] : '';
+      }
+    }
+  }
+  return { hLetters, hStatus, vLetters, vStatus };
+}
+
+// ── Render ─────────────────────────────────────────────────────────────────────
+function renderAll() {
+  renderCross();
+  renderHistory();
+  renderKeyboard();
+  renderPills();
+}
+
+function renderCross() {
+  const grid = document.getElementById('cross-grid');
+  grid.innerHTML = '';
+  const { hLetters, hStatus, vLetters, vStatus } = bestCrossState();
+
+  for (let row = 0; row < 5; row++) {
+    for (let col = 0; col < 5; col++) {
+      const cell = document.createElement('div');
+      cell.className = 'cross-cell';
+      const isH = row === 2;
+      const isV = col === 2;
+
+      if (!isH && !isV) {
+        cell.classList.add('blank');
+      } else if (isH && isV) {
+        // Middle cell: best of H or V
+        const rank = { correct: 3, present: 2, absent: 1 };
+        const hs = hStatus[col], vs = vStatus[row];
+        const best = (!hs && !vs) ? null : (!hs) ? vs : (!vs) ? hs : (rank[hs] >= rank[vs] ? hs : vs);
+        if (best) {
+          cell.classList.add(best);
+          cell.textContent = hLetters[col] || vLetters[row];
+        } else {
+          cell.classList.add('empty');
+          const letter = active === 'h' ? (curH[2] || '') : (curV[2] || '');
+          cell.textContent = letter;
+          if (letter) cell.classList.add('typing');
+        }
+      } else if (isH) {
+        if (hStatus[col]) {
+          cell.classList.add(hStatus[col]);
+          cell.textContent = hLetters[col];
+        } else {
+          cell.classList.add('empty');
+          if (active === 'h') {
+            cell.textContent = curH[col] || '';
+            if (cell.textContent) cell.classList.add('typing');
+          }
+        }
+      } else {
+        // isV
+        const vi = row;
+        if (vStatus[vi]) {
+          cell.classList.add(vStatus[vi]);
+          cell.textContent = vLetters[vi];
+        } else {
+          cell.classList.add('empty');
+          if (active === 'v') {
+            cell.textContent = curV[vi] || '';
+            if (cell.textContent) cell.classList.add('typing');
+          }
+        }
+      }
+
+      grid.appendChild(cell);
+    }
+  }
+}
+
+function renderHistory() {
+  const hGrid = document.getElementById('h-history');
+  const vGrid = document.getElementById('v-history');
+  hGrid.innerHTML = '';
+  vGrid.innerHTML = '';
+
+  for (let r = 0; r < 6; r++) {
+    const hRow = document.createElement('div');
+    hRow.className = 'hist-row';
+    const vRow = document.createElement('div');
+    vRow.className = 'hist-row';
+    hRow.style.marginBottom = '3px';
+    vRow.style.marginBottom = '3px';
+
+    const att = attempts[r];
+    const isCurrent = r === attempts.length && !over;
+
+    for (let c = 0; c < 5; c++) {
+      const hc = document.createElement('div');
+      hc.className = 'hist-cell';
+      const vc = document.createElement('div');
+      vc.className = 'hist-cell';
+
+      if (att) {
+        hc.textContent = att.h[c];
+        hc.classList.add(att.hScore[c]);
+        vc.textContent = att.v[c];
+        vc.classList.add(att.vScore[c]);
+      } else if (isCurrent) {
+        hc.textContent = curH[c] || '';
+        hc.classList.add(curH[c] ? 'current-typed' : 'current-empty');
+        vc.textContent = curV[c] || '';
+        vc.classList.add(curV[c] ? 'current-typed' : 'current-empty');
+      }
+
+      hRow.appendChild(hc);
+      vRow.appendChild(vc);
+    }
+
+    hGrid.appendChild(hRow);
+    vGrid.appendChild(vRow);
+  }
+}
+
+function renderKeyboard() {
+  const kb = document.getElementById('keyboard');
+  kb.innerHTML = '';
+  const ks = keyStates();
+  const rows = [
+    ['Q','W','E','R','T','Y','U','I','O','P'],
+    ['A','S','D','F','G','H','J','K','L'],
+    ['ENTER','Z','X','C','V','B','N','M','⌫'],
+  ];
+  for (const row of rows) {
+    const rowEl = document.createElement('div');
+    rowEl.className = 'key-row';
+    for (const k of row) {
+      const btn = document.createElement('button');
+      btn.className = 'key';
+      btn.textContent = k;
+      if (k === 'ENTER' || k === '⌫') btn.classList.add('wide');
+      if (ks[k]) btn.classList.add(ks[k]);
+      btn.addEventListener('pointerdown', e => { e.preventDefault(); handleKey(k); });
+      rowEl.appendChild(btn);
+    }
+    kb.appendChild(rowEl);
+  }
+}
+
+function renderPills() {
+  const ph = document.getElementById('pill-h');
+  const pv = document.getElementById('pill-v');
+  if (!ph || !pv) return;
+
+  ph.classList.toggle('active', active === 'h');
+  pv.classList.toggle('active', active === 'v');
+
+  const lastH = attempts.length ? attempts[attempts.length - 1] : null;
+  ph.classList.toggle('done', curH.length === 5);
+  pv.classList.toggle('done', curV.length === 5);
+}
+
+// ── Input ──────────────────────────────────────────────────────────────────────
+function setActive(which) {
+  if (over) return;
+  active = which;
+  renderAll();
+}
+
+function handleKey(key) {
+  if (over) return;
+
+  if (key === '⌫' || key === 'BACKSPACE') {
+    if (active === 'h') curH = curH.slice(0, -1);
+    else curV = curV.slice(0, -1);
+    renderAll();
+    return;
+  }
+
+  if (key === 'ENTER') { submitGuess(); return; }
+
+  if (key === 'TAB') {
+    active = active === 'h' ? 'v' : 'h';
+    renderAll();
+    return;
+  }
+
+  if (/^[A-Z]$/.test(key)) {
+    if (active === 'h' && curH.length < 5) {
+      curH += key;
+      if (curH.length === 5) active = 'v'; // auto-switch
+    } else if (active === 'v' && curV.length < 5) {
+      curV += key;
+    }
+    renderAll();
+  }
+}
+
+document.addEventListener('keydown', e => {
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+  if (e.key === 'Tab')       { e.preventDefault(); handleKey('TAB'); return; }
+  if (e.key === 'Backspace') { handleKey('BACKSPACE'); return; }
+  if (e.key === 'Enter')     { handleKey('ENTER'); return; }
+  const k = e.key.toUpperCase();
+  if (/^[A-Z]$/.test(k)) handleKey(k);
+});
+
+function submitGuess() {
+  if (over) return;
+  if (curH.length !== 5) { showMessage('ACROSS needs 5 letters'); shakeRow('h'); return; }
+  if (curV.length !== 5) { showMessage('DOWN needs 5 letters');   shakeRow('v'); return; }
+  if (!WORD_SET.includes(curH)) { showMessage(`${curH} not in word list`); shakeRow('h'); return; }
+  if (!WORD_SET.includes(curV)) { showMessage(`${curV} not in word list`); shakeRow('v'); return; }
+
+  const hScore = score(curH, wordH);
+  const vScore = score(curV, wordV);
+  attempts.push({ h: curH, v: curV, hScore, vScore });
+
+  const hWon = hScore.every(s => s === 'correct');
+  const vWon = vScore.every(s => s === 'correct');
+
+  curH = '';
+  curV = '';
+  active = 'h';
+
+  renderAll();
+
+  if (hWon && vWon) {
+    over = true;
+    const msgs = ['Genius!', 'Amazing!', 'Brilliant!', 'Great!', 'Nice!', 'Phew!'];
+    showMessage(msgs[attempts.length - 1] || 'Got it!');
+    setTimeout(() => showGameOver(true), 600);
+  } else if (attempts.length >= 6) {
+    over = true;
+    showMessage('Better luck next time!');
+    setTimeout(() => showGameOver(false), 600);
+  } else {
+    showMessage('');
+  }
+}
+
+function showGameOver(won) {
+  document.getElementById('switcher').style.display = 'none';
+  const bar = document.getElementById('game-over-bar');
+  bar.style.display = '';
+  bar.innerHTML = `
+    <div class="answer-reveal">
+      ACROSS: <span>${wordH}</span> &nbsp;|&nbsp; DOWN: <span>${wordV}</span>
+    </div>
+    <button class="new-game-btn" onclick="initGame()">NEW GAME</button>
+  `;
+}
+
+// ── Utilities ──────────────────────────────────────────────────────────────────
+let msgTimer;
+function showMessage(msg) {
+  const el = document.getElementById('message');
+  el.textContent = msg;
+  clearTimeout(msgTimer);
+  if (msg) {
+    msgTimer = setTimeout(() => {
+      el.classList.add('hidden');
+      setTimeout(() => { el.textContent = ''; el.classList.remove('hidden'); }, 300);
+    }, 2000);
+  }
+}
+
+function shakeRow(which) {
+  const id = which === 'h' ? 'h-history' : 'v-history';
+  const grid = document.getElementById(id);
+  const rows = grid.querySelectorAll('.hist-row');
+  const row = rows[attempts.length];
+  if (!row) return;
+  row.classList.remove('shake');
+  void row.offsetWidth; // reflow
+  row.classList.add('shake');
+  row.addEventListener('animationend', () => row.classList.remove('shake'), { once: true });
+}
+
+// ── Start ──────────────────────────────────────────────────────────────────────
+initGame();
+</script>
+</body>
+</html>
