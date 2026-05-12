@@ -270,7 +270,7 @@
 </head>
 <body>
 
-<header><h1>Crossle</h1><span style="font-size:0.7rem;color:#818384;letter-spacing:1px;margin-left:10px;align-self:flex-end;padding-bottom:4px;">v1.14</span></header>
+<header><h1>Crossle</h1><span style="font-size:0.7rem;color:#818384;letter-spacing:1px;margin-left:10px;align-self:flex-end;padding-bottom:4px;">v1.15</span></header>
 
 <div class="game-wrap">
 
@@ -405,8 +405,7 @@ function keyStates() {
     const h = hS[l], v = vS[l];
     if (h === 'correct' || v === 'correct')       out[l] = 'correct';
     else if (h === 'present' || v === 'present')  out[l] = 'present';
-    else if (h === 'absent'  && v === 'absent')   out[l] = 'absent';
-    // absent in one but untested in the other: leave uncoloured
+    else if (h === 'absent' || v === 'absent')    out[l] = 'absent';
   }
   return out;
 }
