@@ -270,7 +270,7 @@
 </head>
 <body>
 
-<header><h1>Crossle</h1><span style="font-size:0.7rem;color:#818384;letter-spacing:1px;margin-left:10px;align-self:flex-end;padding-bottom:4px;">v1.13</span></header>
+<header><h1>Crossle</h1><span style="font-size:0.7rem;color:#818384;letter-spacing:1px;margin-left:10px;align-self:flex-end;padding-bottom:4px;">v1.14</span></header>
 
 <div class="game-wrap">
 
@@ -355,17 +355,60 @@ function score(guess, answer) {
   return res;
 }
 
+function scoreCross(hGuess, vGuess, hAnswer, vAnswer) {
+  const hScore = Array(5).fill('absent');
+  const vScore = Array(5).fill('absent');
+
+  // Combined letter pool from both answers
+  const pool = {};
+  for (const l of [...hAnswer, ...vAnswer]) pool[l] = (pool[l] || 0) + 1;
+
+  // Pass 1: greens consume from pool
+  for (let i = 0; i < 5; i++) {
+    if (hGuess[i] === hAnswer[i]) { hScore[i] = 'correct'; pool[hGuess[i]]--; }
+  }
+  for (let i = 0; i < 5; i++) {
+    if (vGuess[i] === vAnswer[i]) { vScore[i] = 'correct'; pool[vGuess[i]]--; }
+  }
+
+  // Pass 2: yellows — first appearances in H then V, consuming remaining pool
+  for (let i = 0; i < 5; i++) {
+    if (hScore[i] !== 'correct' && pool[hGuess[i]] > 0) {
+      hScore[i] = 'present'; pool[hGuess[i]]--;
+    }
+  }
+  for (let i = 0; i < 5; i++) {
+    if (vScore[i] !== 'correct' && pool[vGuess[i]] > 0) {
+      vScore[i] = 'present'; pool[vGuess[i]]--;
+    }
+  }
+
+  return { hScore, vScore };
+}
+
 // ── Keyboard letter states ─────────────────────────────────────────────────────
 function keyStates() {
-  const s = {};
+  const hS = {}, vS = {};
   const rank = { correct: 3, present: 2, absent: 1 };
   for (const a of attempts) {
-    [...a.hScore, ...a.vScore].forEach((st, i) => {
-      const letter = i < 5 ? a.h[i] : a.v[i - 5];
-      if (!s[letter] || rank[st] > rank[s[letter]]) s[letter] = st;
+    a.hScore.forEach((st, i) => {
+      const l = a.h[i];
+      if (!hS[l] || rank[st] > rank[hS[l]]) hS[l] = st;
+    });
+    a.vScore.forEach((st, i) => {
+      const l = a.v[i];
+      if (!vS[l] || rank[st] > rank[vS[l]]) vS[l] = st;
     });
   }
-  return s;
+  const out = {};
+  for (const l of new Set([...Object.keys(hS), ...Object.keys(vS)])) {
+    const h = hS[l], v = vS[l];
+    if (h === 'correct' || v === 'correct')       out[l] = 'correct';
+    else if (h === 'present' || v === 'present')  out[l] = 'present';
+    else if (h === 'absent'  && v === 'absent')   out[l] = 'absent';
+    // absent in one but untested in the other: leave uncoloured
+  }
+  return out;
 }
 
 // ── Best cross state (for cross grid) ─────────────────────────────────────────
@@ -402,7 +445,8 @@ function renderAll() {
 function renderCross() {
   const grid = document.getElementById('cross-grid');
   grid.innerHTML = '';
-  const { hLetters, hStatus, vLetters, vStatus } = bestCrossState();
+  const last = attempts.length ? attempts[attempts.length - 1] : null;
+  const rank = { correct: 3, present: 2, absent: 1 };
 
   for (let row = 0; row < 5; row++) {
     for (let col = 0; col < 5; col++) {
@@ -414,42 +458,40 @@ function renderCross() {
       if (!isH && !isV) {
         cell.classList.add('blank');
       } else if (isH && isV) {
-        // Middle cell: best of H or V
-        const rank = { correct: 3, present: 2, absent: 1 };
-        const hs = hStatus[col], vs = vStatus[row];
-        const best = (!hs && !vs) ? null : (!hs) ? vs : (!vs) ? hs : (rank[hs] >= rank[vs] ? hs : vs);
-        if (best) {
+        // Centre cell — current typing wins, then last attempt
+        const typed = curH[2] || curV[2] || '';
+        if (typed) {
+          cell.classList.add('empty', 'typing');
+          cell.textContent = typed;
+        } else if (last) {
+          const best = rank[last.hScore[2]] >= rank[last.vScore[2]] ? last.hScore[2] : last.vScore[2];
           cell.classList.add(best);
-          cell.textContent = hLetters[col] || vLetters[row];
+          cell.textContent = last.h[2];
         } else {
           cell.classList.add('empty');
-          const letter = curH[2] || curV[2] || '';
-          cell.textContent = letter;
-          if (letter) cell.classList.add('typing');
         }
       } else if (isH) {
-        if (hStatus[col]) {
-          cell.classList.add(hStatus[col]);
-          cell.textContent = hLetters[col];
+        const typed = curH[col] || '';
+        if (typed) {
+          cell.classList.add('empty', 'typing');
+          cell.textContent = typed;
+        } else if (last) {
+          cell.classList.add(last.hScore[col]);
+          cell.textContent = last.h[col];
         } else {
           cell.classList.add('empty');
-          if (active === 'h') {
-            cell.textContent = curH[col] || '';
-            if (cell.textContent) cell.classList.add('typing');
-          }
         }
       } else {
-        // isV
         const vi = row;
-        if (vStatus[vi]) {
-          cell.classList.add(vStatus[vi]);
-          cell.textContent = vLetters[vi];
+        const typed = curV[vi] || '';
+        if (typed) {
+          cell.classList.add('empty', 'typing');
+          cell.textContent = typed;
+        } else if (last) {
+          cell.classList.add(last.vScore[vi]);
+          cell.textContent = last.v[vi];
         } else {
           cell.classList.add('empty');
-          if (active === 'v') {
-            cell.textContent = curV[vi] || '';
-            if (cell.textContent) cell.classList.add('typing');
-          }
         }
       }
 
@@ -607,8 +649,7 @@ function submitGuess() {
   if (!WORD_SET.has(hWord)) { showMessage(`${hWord} not in word list`); shakeRow('h'); return; }
   if (!WORD_SET.has(vWord)) { showMessage(`${vWord} not in word list`); shakeRow('v'); return; }
 
-  const hScore = score(hWord, wordH);
-  const vScore = score(vWord, wordV);
+  const { hScore, vScore } = scoreCross(hWord, vWord, wordH, wordV);
   attempts.push({ h: hWord, v: vWord, hScore, vScore });
 
   const hWon = hScore.every(s => s === 'correct');
